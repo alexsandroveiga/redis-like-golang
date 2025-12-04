@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -97,24 +98,96 @@ func (s *Store) TTL(ctx context.Context, key string) int64 {
 }
 
 func (s *Store) Persist(ctx context.Context, key string) bool {
-	panic("unimplemented")
+	if ctx.Err() != nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, exists := s.data[key]
+	if !exists {
+		return false
+	}
+	item.ExpiresAt = nil
+	return true
 }
 
 func (s *Store) Keys(ctx context.Context, pattern string) []string {
-	panic("unimplemented")
+	if ctx.Err() != nil {
+		return []string{}
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	now := time.Now().Unix()
+	var matches []string
+	for key, item := range s.data {
+		if item.IsExpired(now) {
+			continue
+		}
+		if matchPattern(key, pattern) {
+			matches = append(matches, key)
+		}
+	}
+	return matches
 }
 
 func (s *Store) Exists(ctx context.Context, key string) bool {
-	panic("unimplemented")
+	if ctx.Err() != nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	item, exists := s.data[key]
+	if !exists {
+		return false
+	}
+	return !item.IsExpired(time.Now().Unix())
 }
 func (s *Store) Size(ctx context.Context) int {
-	panic("unimplemented")
+	if ctx.Err() != nil {
+		return 0
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.data)
 }
 
 func (s *Store) StartCleanup(intervalInMs int64) {
-	panic("unimplemented")
+	interval := time.Duration(intervalInMs) * time.Millisecond
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				s.cleanupExpired()
+			case <-s.stopCleanup:
+			}
+		}
+	}()
 }
 
 func (s *Store) StopCleanup() {
-	panic("unimplemented")
+	close(s.stopCleanup)
+}
+
+func (s *Store) cleanupExpired() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().Unix()
+	for key, item := range s.data {
+		if item.IsExpired(now) {
+			delete(s.data, key)
+		}
+	}
+}
+
+func matchPattern(key, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+	matched, err := filepath.Match(pattern, key)
+	if err != nil {
+		return key == pattern
+	}
+	return matched
 }
