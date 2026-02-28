@@ -93,6 +93,11 @@ func (a *AOF) Replay(ctx context.Context, store repository.KeyValueRepository) e
 				continue
 			}
 			store.Expire(ctx, key, seconds)
+		case command.PERSIST:
+			if len(args) < 1 {
+				continue
+			}
+			store.Persist(ctx, args[0])
 		case command.DEL:
 			if len(args) < 1 {
 				continue
