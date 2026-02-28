@@ -29,7 +29,7 @@ func main() {
 
 	ctn, cleanup, err := container.InitializeContainer(opt)
 	if err != nil {
-		log.Fatalf("Failed to initialize container: %v", err)
+		log.Fatalf("Failed to create container: %v", err)
 	}
 
 	defer func() {
@@ -46,7 +46,7 @@ func main() {
 		if err := ctn.Persistence.Replay(ctx, ctn.Store); err != nil {
 			log.Printf("Warning: failed to replay AOF: %v", err)
 		} else {
-			log.Println("Replayed AOF")
+			log.Println("AOF replay completed")
 		}
 	}
 
@@ -55,27 +55,26 @@ func main() {
 
 	listener, err := net.Listen("tcp", ":"+*port)
 	if err != nil {
-		log.Fatalf("Error listening on port %v: %v", *port, err)
+		log.Fatalf("Failed to listen on port %s: %v", *port, err)
 	}
 
 	defer listener.Close()
 
-	log.Printf("Server is listening on port %v (AOF: %v)", *port, *enableAOF)
+	log.Printf("Server listening on port %s (AOF: %v)", *port, *enableAOF)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-sigChan
-		log.Printf("Caught interrupt signal, shutting down...")
-		time.Sleep(5 * time.Second)
+		log.Println("Shutting down...")
 		listener.Close()
 	}()
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("Listener closed, exiting accept loop")
+			log.Printf("Failed to accept connection: %v", err)
 			break
 		}
 		go ctn.TCPHandler.HandleConnection(conn)
