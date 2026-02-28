@@ -20,7 +20,7 @@ type AOF struct {
 }
 
 func NewAOF(filepath string) (repository.PersistenceRepository, error) {
-	file, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
 	}
